@@ -23,9 +23,11 @@ interface ScanResultsProps {
 export function ScanResults({ scanId }: ScanResultsProps) {
   const [results, setResults] = useState<ScanResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [scanStatus, setScanStatus] = useState<string>('processing');
 
   useEffect(() => {
     fetchResults();
+    checkScanStatus();
     
     // Subscribe to realtime updates
     const channel = supabase
@@ -39,7 +41,22 @@ export function ScanResults({ scanId }: ScanResultsProps) {
           filter: `scan_id=eq.${scanId}`
         },
         (payload) => {
-          setResults(prev => [...prev, payload.new as ScanResult]);
+          setResults(prev => [...prev, payload.new as ScanResult].sort((a, b) => b.similarity_score - a.similarity_score));
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'scans',
+          filter: `id=eq.${scanId}`
+        },
+        (payload) => {
+          setScanStatus(payload.new.status);
+          if (payload.new.status === 'completed') {
+            setIsLoading(false);
+          }
         }
       )
       .subscribe();
@@ -48,6 +65,24 @@ export function ScanResults({ scanId }: ScanResultsProps) {
       supabase.removeChannel(channel);
     };
   }, [scanId]);
+
+  const checkScanStatus = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('scans')
+        .select('status')
+        .eq('id', scanId)
+        .single();
+
+      if (error) throw error;
+      setScanStatus(data.status);
+      if (data.status === 'completed' || data.status === 'failed') {
+        setIsLoading(false);
+      }
+    } catch (error) {
+      console.error('Error checking scan status:', error);
+    }
+  };
 
   const fetchResults = async () => {
     try {
@@ -59,9 +94,12 @@ export function ScanResults({ scanId }: ScanResultsProps) {
 
       if (error) throw error;
       setResults(data || []);
+      
+      if (data && data.length > 0) {
+        setIsLoading(false);
+      }
     } catch (error) {
       console.error('Error fetching results:', error);
-    } finally {
       setIsLoading(false);
     }
   };
@@ -80,13 +118,51 @@ export function ScanResults({ scanId }: ScanResultsProps) {
     return "Distant";
   };
 
-  if (isLoading) {
+  if (isLoading || scanStatus === 'processing') {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex flex-col items-center justify-center py-12 space-y-6">
         <div className="relative">
           <div className="w-24 h-24 border-4 border-primary/30 rounded-full"></div>
           <div className="absolute top-0 left-0 w-24 h-24 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
         </div>
+        <div className="text-center space-y-2">
+          <h3 className="text-xl font-semibold">Scanning Innovation Databases</h3>
+          <p className="text-muted-foreground">
+            {results.length > 0 
+              ? `Found ${results.length} similar innovations so far...` 
+              : 'Searching USPTO, international patents, and startup databases...'}
+          </p>
+        </div>
+        
+        {/* Show partial results while loading */}
+        {results.length > 0 && (
+          <div className="w-full max-w-4xl">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 opacity-75">
+              {results.slice(0, 3).map((result) => (
+                <Card key={result.id} className="bg-gradient-card border-border animate-fade-in">
+                  <CardHeader>
+                    <div className="flex items-start justify-between gap-2">
+                      <CardTitle className="text-base line-clamp-2">{result.title}</CardTitle>
+                      <Badge className={`${getSimilarityColor(result.similarity_score)} shrink-0`}>
+                        {result.similarity_score}%
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (scanStatus === 'failed') {
+    return (
+      <div className="text-center py-12">
+        <p className="text-destructive text-lg mb-4">
+          Scan failed. Please try again.
+        </p>
       </div>
     );
   }
@@ -104,9 +180,14 @@ export function ScanResults({ scanId }: ScanResultsProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">
-          Found {results.length} Similar Innovation{results.length !== 1 ? 's' : ''}
-        </h2>
+        <div>
+          <h2 className="text-2xl font-bold">
+            Found {results.length} Similar Innovation{results.length !== 1 ? 's' : ''}
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Searched across USPTO, international patents, and global startups
+          </p>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
