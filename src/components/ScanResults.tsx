@@ -29,6 +29,11 @@ export function ScanResults({ scanId }: ScanResultsProps) {
     fetchResults();
     checkScanStatus();
     
+    // Set a timeout to check for stalled scans
+    const timeoutId = setTimeout(() => {
+      checkScanStatus();
+    }, 30000); // Check after 30 seconds
+    
     // Subscribe to realtime updates
     const channel = supabase
       .channel('scan-results-changes')
@@ -62,6 +67,7 @@ export function ScanResults({ scanId }: ScanResultsProps) {
       .subscribe();
 
     return () => {
+      clearTimeout(timeoutId);
       supabase.removeChannel(channel);
     };
   }, [scanId]);

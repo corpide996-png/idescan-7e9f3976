@@ -48,21 +48,35 @@ export function ScanForm({ onScanStart }: ScanFormProps) {
       const { data: { user } } = await supabase.auth.getUser();
       
       let imageUrl = null;
+      
+      // Handle image upload if present
       if (imageFile) {
-        const fileName = `${Date.now()}-${imageFile.name}`;
+        const fileName = `${Date.now()}-${imageFile.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('scan-images')
-          .upload(fileName, imageFile);
+          .upload(fileName, imageFile, {
+            cacheControl: '3600',
+            upsert: false
+          });
 
-        if (uploadError) throw uploadError;
-        
-        const { data: { publicUrl } } = supabase.storage
-          .from('scan-images')
-          .getPublicUrl(uploadData.path);
-        
-        imageUrl = publicUrl;
+        if (uploadError) {
+          console.error('Upload error:', uploadError);
+          toast({
+            title: "Image upload failed",
+            description: "Continuing scan without image",
+            variant: "destructive"
+          });
+        } else {
+          const { data: { publicUrl } } = supabase.storage
+            .from('scan-images')
+            .getPublicUrl(uploadData.path);
+          
+          imageUrl = publicUrl;
+        }
       }
 
+      // Create scan record
       const { data: scanData, error: scanError } = await supabase
         .from('scans')
         .insert({
@@ -76,21 +90,24 @@ export function ScanForm({ onScanStart }: ScanFormProps) {
 
       if (scanError) throw scanError;
 
-      // Call edge function to process scan
-      const { error: functionError } = await supabase.functions.invoke('process-scan', {
+      // Start scan immediately and don't wait
+      onScanStart(scanData.id);
+      
+      // Call edge function asynchronously
+      supabase.functions.invoke('process-scan', {
         body: { scanId: scanData.id }
+      }).catch(error => {
+        console.error('Function invoke error:', error);
       });
 
-      if (functionError) throw functionError;
-
-      onScanStart(scanData.id);
       setTextInput("");
       setImageFile(null);
       
       toast({
         title: "Scan started!",
-        description: "Searching for similar innovations..."
+        description: "Searching innovation databases..."
       });
+      
     } catch (error: any) {
       console.error('Scan error:', error);
       toast({
