@@ -115,9 +115,9 @@ serve(async (req) => {
           messages: [
             {
               role: 'system',
-              content: `Find 5 similar real innovations. Return ONLY valid JSON array:
-[{"title":"...","owner":"...","country":"...","type":"patent|startup","status":"...","snippet":"...","url":"..."}]
-Mix of international patents and real startups.`
+              content: `Find 5 similar real innovations. Return ONLY valid JSON array with REAL working URLs:
+[{"title":"...","owner":"...","country":"...","type":"patent|startup","status":"...","snippet":"...","url":"https://..."}]
+Include real, working URLs to patent offices (espacenet.com, patents.google.com) or company websites.`
             },
             {
               role: 'user',
