@@ -2,3 +2,6 @@ project_id = "brtopjwrnghynluxyxsp"
 
 [functions.process-scan]
 verify_jwt = false
+
+[functions.payment-webhook]
+verify_jwt = false
