@@ -1,8 +1,17 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, Building2, MapPin, Shield } from "lucide-react";
+import { ExternalLink, Building2, MapPin, Shield, User, Linkedin, Twitter, Mail } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface ScanResult {
   id: string;
@@ -14,6 +23,13 @@ interface ScanResult {
   legal_status: string | null;
   snippet: string | null;
   url: string | null;
+  founder_name: string | null;
+  founder_country: string | null;
+  founder_social_media: {
+    linkedin?: string;
+    twitter?: string;
+    email?: string;
+  } | null;
 }
 
 interface ScanResultsProps {
@@ -46,7 +62,11 @@ export function ScanResults({ scanId }: ScanResultsProps) {
           filter: `scan_id=eq.${scanId}`
         },
         (payload) => {
-          setResults(prev => [...prev, payload.new as ScanResult].sort((a, b) => b.similarity_score - a.similarity_score));
+          const newResult = {
+            ...payload.new,
+            founder_social_media: payload.new.founder_social_media as { linkedin?: string; twitter?: string; email?: string; } | null
+          } as ScanResult;
+          setResults(prev => [...prev, newResult].sort((a, b) => b.similarity_score - a.similarity_score));
         }
       )
       .on(
@@ -99,9 +119,16 @@ export function ScanResults({ scanId }: ScanResultsProps) {
         .order('similarity_score', { ascending: false });
 
       if (error) throw error;
-      setResults(data || []);
       
-      if (data && data.length > 0) {
+      // Cast the data to our ScanResult type
+      const typedResults = (data || []).map(item => ({
+        ...item,
+        founder_social_media: item.founder_social_media as { linkedin?: string; twitter?: string; email?: string; } | null
+      })) as ScanResult[];
+      
+      setResults(typedResults);
+      
+      if (typedResults && typedResults.length > 0) {
         setIsLoading(false);
       }
     } catch (error) {
@@ -247,17 +274,95 @@ export function ScanResults({ scanId }: ScanResultsProps) {
                 </Badge>
               )}
 
-              {result.url && (
-                <a
-                  href={result.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-sm text-accent hover:text-accent-glow transition-colors"
-                >
-                  View Details
-                  <ExternalLink className="w-4 h-4" />
-                </a>
-              )}
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="link" className="flex items-center gap-2 text-sm text-accent hover:text-accent-glow transition-colors p-0 h-auto">
+                    View Details
+                    <ExternalLink className="w-4 h-4" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>{result.title}</DialogTitle>
+                    <DialogDescription>{result.snippet}</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 mt-4">
+                    {result.founder_name ? (
+                      <>
+                        <div className="flex items-start gap-3">
+                          <User className="w-5 h-5 mt-1 text-muted-foreground" />
+                          <div>
+                            <p className="font-semibold">Founder/Inventor</p>
+                            <p className="text-sm text-muted-foreground">{result.founder_name}</p>
+                          </div>
+                        </div>
+                        {result.founder_country && (
+                          <div className="flex items-start gap-3">
+                            <MapPin className="w-5 h-5 mt-1 text-muted-foreground" />
+                            <div>
+                              <p className="font-semibold">Country of Origin</p>
+                              <p className="text-sm text-muted-foreground">{result.founder_country}</p>
+                            </div>
+                          </div>
+                        )}
+                        {result.founder_social_media && Object.keys(result.founder_social_media).length > 0 && (
+                          <div className="space-y-2">
+                            <p className="font-semibold">Social Media</p>
+                            <div className="flex flex-col gap-2">
+                              {result.founder_social_media.linkedin && (
+                                <a
+                                  href={result.founder_social_media.linkedin}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2 text-sm text-primary hover:underline"
+                                >
+                                  <Linkedin className="w-4 h-4" />
+                                  LinkedIn Profile
+                                </a>
+                              )}
+                              {result.founder_social_media.twitter && (
+                                <a
+                                  href={result.founder_social_media.twitter}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2 text-sm text-primary hover:underline"
+                                >
+                                  <Twitter className="w-4 h-4" />
+                                  Twitter/X Profile
+                                </a>
+                              )}
+                              {result.founder_social_media.email && (
+                                <a
+                                  href={`mailto:${result.founder_social_media.email}`}
+                                  className="flex items-center gap-2 text-sm text-primary hover:underline"
+                                >
+                                  <Mail className="w-4 h-4" />
+                                  {result.founder_social_media.email}
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Founder information not available for this result.</p>
+                    )}
+                    {result.url && (
+                      <div className="pt-4 border-t">
+                        <a
+                          href={result.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-primary hover:underline flex items-center gap-2"
+                        >
+                          Visit Official Source
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
             </CardContent>
           </Card>
         ))}

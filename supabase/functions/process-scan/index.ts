@@ -151,14 +151,14 @@ serve(async (req) => {
                 messages: [
                   {
                     role: 'system',
-                    content: 'Find 2 REAL companies/startups with verifiable websites. Return ONLY JSON: [{"title":"Company Name","owner":"Company Name","snippet":"what they do","url":"https://realwebsite.com"}]'
+                    content: 'Find 2 REAL companies/startups/patents with founder/inventor information. Return ONLY JSON: [{"title":"Company/Patent Name","owner":"Company Name","snippet":"what they do","url":"https://realwebsite.com","founder_name":"Full Name of CEO/Founder/Inventor","founder_country":"Country","founder_social_media":{"linkedin":"url","twitter":"url","email":"email"}}]. Include as many social media links as you can find.'
                   },
                   {
                     role: 'user',
                     content: query
                   }
                 ],
-                max_tokens: 500
+                max_tokens: 800
               })
             });
 
@@ -177,11 +177,14 @@ serve(async (req) => {
                       allResults.push({
                         title: company.title,
                         owner: company.owner,
-                        country: 'Global',
+                        country: company.founder_country || 'Global',
                         source_type: 'startup',
                         legal_status: 'Active',
                         snippet: company.snippet,
-                        url: company.url
+                        url: company.url,
+                        founder_name: company.founder_name,
+                        founder_country: company.founder_country,
+                        founder_social_media: company.founder_social_media || {}
                       });
                     }
                   }
@@ -240,7 +243,10 @@ serve(async (req) => {
         source_type: result.source_type,
         legal_status: result.legal_status,
         snippet: result.snippet?.substring(0, 500),
-        url: result.url
+        url: result.url,
+        founder_name: result.founder_name || null,
+        founder_country: result.founder_country || null,
+        founder_social_media: result.founder_social_media || {}
       };
     }).filter(result => result !== null); // Remove null results (those without valid URLs)
 

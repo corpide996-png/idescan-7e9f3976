@@ -42,6 +42,9 @@ export type Database = {
         Row: {
           country: string | null
           created_at: string | null
+          founder_country: string | null
+          founder_name: string | null
+          founder_social_media: Json | null
           id: string
           legal_status: string | null
           owner: string | null
@@ -55,6 +58,9 @@ export type Database = {
         Insert: {
           country?: string | null
           created_at?: string | null
+          founder_country?: string | null
+          founder_name?: string | null
+          founder_social_media?: Json | null
           id?: string
           legal_status?: string | null
           owner?: string | null
@@ -68,6 +74,9 @@ export type Database = {
         Update: {
           country?: string | null
           created_at?: string | null
+          founder_country?: string | null
+          founder_name?: string | null
+          founder_social_media?: Json | null
           id?: string
           legal_status?: string | null
           owner?: string | null
