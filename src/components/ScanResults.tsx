@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, Building2, MapPin, Shield, User, Linkedin, Twitter, Mail } from "lucide-react";
+import { ExternalLink, Building2, MapPin, Shield, User, Linkedin, Twitter, Mail, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
@@ -40,10 +41,14 @@ export function ScanResults({ scanId }: ScanResultsProps) {
   const [results, setResults] = useState<ScanResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [scanStatus, setScanStatus] = useState<string>('processing');
+  const [hasSubscription, setHasSubscription] = useState(false);
+  const [checkingSubscription, setCheckingSubscription] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchResults();
     checkScanStatus();
+    checkUserSubscription();
     
     // Set a timeout to check for stalled scans
     const timeoutId = setTimeout(() => {
@@ -91,6 +96,33 @@ export function ScanResults({ scanId }: ScanResultsProps) {
       supabase.removeChannel(channel);
     };
   }, [scanId]);
+
+  const checkUserSubscription = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setCheckingSubscription(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('user_subscriptions')
+        .select('expires_at')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error checking subscription:', error);
+      }
+
+      const isActive = data && new Date(data.expires_at) > new Date();
+      setHasSubscription(!!isActive);
+      setCheckingSubscription(false);
+    } catch (error) {
+      console.error('Error checking subscription:', error);
+      setCheckingSubscription(false);
+    }
+  };
 
   const checkScanStatus = async () => {
     try {
@@ -274,95 +306,137 @@ export function ScanResults({ scanId }: ScanResultsProps) {
                 </Badge>
               )}
 
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="link" className="flex items-center gap-2 text-sm text-accent hover:text-accent-glow transition-colors p-0 h-auto">
-                    View Details
-                    <ExternalLink className="w-4 h-4" />
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle>{result.title}</DialogTitle>
-                    <DialogDescription>{result.snippet}</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 mt-4">
-                    {result.founder_name ? (
-                      <>
-                        <div className="flex items-start gap-3">
-                          <User className="w-5 h-5 mt-1 text-muted-foreground" />
-                          <div>
-                            <p className="font-semibold">Founder/Inventor</p>
-                            <p className="text-sm text-muted-foreground">{result.founder_name}</p>
-                          </div>
-                        </div>
-                        {result.founder_country && (
+              {hasSubscription ? (
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="link" className="flex items-center gap-2 text-sm text-accent hover:text-accent-glow transition-colors p-0 h-auto">
+                      View Details
+                      <ExternalLink className="w-4 h-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>{result.title}</DialogTitle>
+                      <DialogDescription>{result.snippet}</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-4">
+                      {result.founder_name ? (
+                        <>
                           <div className="flex items-start gap-3">
-                            <MapPin className="w-5 h-5 mt-1 text-muted-foreground" />
+                            <User className="w-5 h-5 mt-1 text-muted-foreground" />
                             <div>
-                              <p className="font-semibold">Country of Origin</p>
-                              <p className="text-sm text-muted-foreground">{result.founder_country}</p>
+                              <p className="font-semibold">Founder/Inventor</p>
+                              <p className="text-sm text-muted-foreground">{result.founder_name}</p>
                             </div>
                           </div>
-                        )}
-                        {result.founder_social_media && Object.keys(result.founder_social_media).length > 0 && (
-                          <div className="space-y-2">
-                            <p className="font-semibold">Social Media</p>
-                            <div className="flex flex-col gap-2">
-                              {result.founder_social_media.linkedin && (
-                                <a
-                                  href={result.founder_social_media.linkedin}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-2 text-sm text-primary hover:underline"
-                                >
-                                  <Linkedin className="w-4 h-4" />
-                                  LinkedIn Profile
-                                </a>
-                              )}
-                              {result.founder_social_media.twitter && (
-                                <a
-                                  href={result.founder_social_media.twitter}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-2 text-sm text-primary hover:underline"
-                                >
-                                  <Twitter className="w-4 h-4" />
-                                  Twitter/X Profile
-                                </a>
-                              )}
-                              {result.founder_social_media.email && (
-                                <a
-                                  href={`mailto:${result.founder_social_media.email}`}
-                                  className="flex items-center gap-2 text-sm text-primary hover:underline"
-                                >
-                                  <Mail className="w-4 h-4" />
-                                  {result.founder_social_media.email}
-                                </a>
-                              )}
+                          {result.founder_country && (
+                            <div className="flex items-start gap-3">
+                              <MapPin className="w-5 h-5 mt-1 text-muted-foreground" />
+                              <div>
+                                <p className="font-semibold">Country of Origin</p>
+                                <p className="text-sm text-muted-foreground">{result.founder_country}</p>
+                              </div>
                             </div>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">Founder information not available for this result.</p>
-                    )}
-                    {result.url && (
-                      <div className="pt-4 border-t">
-                        <a
-                          href={result.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-primary hover:underline flex items-center gap-2"
-                        >
-                          Visit Official Source
-                          <ExternalLink className="w-4 h-4" />
-                        </a>
+                          )}
+                          {result.founder_social_media && Object.keys(result.founder_social_media).length > 0 && (
+                            <div className="space-y-2">
+                              <p className="font-semibold">Social Media</p>
+                              <div className="flex flex-col gap-2">
+                                {result.founder_social_media.linkedin && (
+                                  <a
+                                    href={result.founder_social_media.linkedin}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 text-sm text-primary hover:underline"
+                                  >
+                                    <Linkedin className="w-4 h-4" />
+                                    LinkedIn Profile
+                                  </a>
+                                )}
+                                {result.founder_social_media.twitter && (
+                                  <a
+                                    href={result.founder_social_media.twitter}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 text-sm text-primary hover:underline"
+                                  >
+                                    <Twitter className="w-4 h-4" />
+                                    Twitter/X Profile
+                                  </a>
+                                )}
+                                {result.founder_social_media.email && (
+                                  <a
+                                    href={`mailto:${result.founder_social_media.email}`}
+                                    className="flex items-center gap-2 text-sm text-primary hover:underline"
+                                  >
+                                    <Mail className="w-4 h-4" />
+                                    {result.founder_social_media.email}
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Founder information not available for this result.</p>
+                      )}
+                      {result.url && (
+                        <div className="pt-4 border-t">
+                          <a
+                            href={result.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-primary hover:underline flex items-center gap-2"
+                          >
+                            Visit Official Source
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              ) : (
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="flex items-center gap-2 text-sm">
+                      <Lock className="w-4 h-4" />
+                      Unlock Details
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Unlock Founder Details</DialogTitle>
+                      <DialogDescription>
+                        Get access to founder information, social media handles, and contact details for 7 days.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-4">
+                      <div className="bg-muted p-4 rounded-lg space-y-2">
+                        <p className="text-sm font-semibold">What you'll get:</p>
+                        <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                          <li>Founder/Inventor names</li>
+                          <li>Country of origin</li>
+                          <li>LinkedIn profiles</li>
+                          <li>Twitter/X handles</li>
+                          <li>Email addresses</li>
+                          <li>7 days unlimited access</li>
+                        </ul>
                       </div>
-                    )}
-                  </div>
-                </DialogContent>
-              </Dialog>
+                      <Button 
+                        className="w-full" 
+                        onClick={() => window.open('https://payment.intasend.com/pay/70037622-8b68-40d4-95ce-b04f8fd4058b/', '_blank')}
+                      >
+                        Pay to Unlock
+                        <ExternalLink className="w-4 h-4 ml-2" />
+                      </Button>
+                      <p className="text-xs text-muted-foreground text-center">
+                        After payment, refresh the page to access details
+                      </p>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
             </CardContent>
           </Card>
         ))}
