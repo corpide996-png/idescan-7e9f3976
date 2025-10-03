@@ -55,6 +55,15 @@ export function ScanResults({ scanId }: ScanResultsProps) {
       checkScanStatus();
     }, 30000); // Check after 30 seconds
     
+    // Re-check subscription when page becomes visible (after payment)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkUserSubscription();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
     // Subscribe to realtime updates
     const channel = supabase
       .channel('scan-results-changes')
@@ -89,10 +98,23 @@ export function ScanResults({ scanId }: ScanResultsProps) {
           }
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'user_subscriptions'
+        },
+        () => {
+          // Re-check subscription when subscriptions table changes
+          checkUserSubscription();
+        }
+      )
       .subscribe();
 
     return () => {
       clearTimeout(timeoutId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       supabase.removeChannel(channel);
     };
   }, [scanId]);
@@ -431,7 +453,7 @@ export function ScanResults({ scanId }: ScanResultsProps) {
                         <ExternalLink className="w-4 h-4 ml-2" />
                       </Button>
                       <p className="text-xs text-muted-foreground text-center">
-                        After payment, refresh the page to access details
+                        After payment, return to this tab to automatically access details
                       </p>
                     </div>
                   </DialogContent>
