@@ -43,6 +43,7 @@ export function ScanResults({ scanId }: ScanResultsProps) {
   const [scanStatus, setScanStatus] = useState<string>('processing');
   const [hasSubscription, setHasSubscription] = useState(false);
   const [checkingSubscription, setCheckingSubscription] = useState(true);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -118,6 +119,64 @@ export function ScanResults({ scanId }: ScanResultsProps) {
       supabase.removeChannel(channel);
     };
   }, [scanId]);
+
+  const handlePayment = async () => {
+    try {
+      setIsProcessingPayment(true);
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast({
+          title: "Authentication Required",
+          description: "Please log in to make a payment",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log('Initiating payment...');
+      
+      const { data, error } = await supabase.functions.invoke('initiate-payment', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
+
+      if (error) {
+        console.error('Payment initiation error:', error);
+        toast({
+          title: "Payment Error",
+          description: "Failed to initiate payment. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (data?.payment_url) {
+        console.log('Opening payment URL:', data.payment_url);
+        window.open(data.payment_url, '_blank');
+        toast({
+          title: "Payment Initiated",
+          description: "Payment page opened. Complete payment to unlock details.",
+        });
+      } else {
+        toast({
+          title: "Payment Error",
+          description: "Failed to get payment URL",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Payment error:', error);
+      toast({
+        title: "Error",
+        description: "An error occurred. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
 
   const checkUserSubscription = async () => {
     try {
@@ -447,13 +506,14 @@ export function ScanResults({ scanId }: ScanResultsProps) {
                       </div>
                       <Button 
                         className="w-full" 
-                        onClick={() => window.open('https://payment.intasend.com/pay/70037622-8b68-40d4-95ce-b04f8fd4058b/', '_blank')}
+                        onClick={handlePayment}
+                        disabled={isProcessingPayment}
                       >
-                        Pay to Unlock
-                        <ExternalLink className="w-4 h-4 ml-2" />
+                        {isProcessingPayment ? 'Processing...' : 'Pay to Unlock (10 KES)'}
+                        {!isProcessingPayment && <ExternalLink className="w-4 h-4 ml-2" />}
                       </Button>
                       <p className="text-xs text-muted-foreground text-center">
-                        After payment, return to this tab to automatically access details
+                        Complete payment to get 7 days unlimited access
                       </p>
                     </div>
                   </DialogContent>
