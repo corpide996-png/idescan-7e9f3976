@@ -56,6 +56,7 @@ serve(async (req) => {
     // Create payment request
     const paymentData = {
       public_key: intasendPublishableKey,
+      method: 'M-PESA',
       amount: 10, // 10 KES - adjust as needed
       currency: 'KES',
       email: profile.email,
