@@ -53,28 +53,28 @@ serve(async (req) => {
 
     const webhookUrl = `${supabaseUrl}/functions/v1/payment-webhook`;
 
-    // Create payment request
-    const paymentData = {
+    // Create checkout session
+    const checkoutData = {
       public_key: intasendPublishableKey,
-      method: 'M-PESA',
-      amount: 10, // 10 KES - adjust as needed
+      amount: 200, // 200 KES for 7-day access
       currency: 'KES',
       email: profile.email,
       first_name: profile.full_name?.split(' ')[0] || 'User',
       last_name: profile.full_name?.split(' ').slice(1).join(' ') || '',
       api_ref: `subscription_${user.id}_${Date.now()}`,
       webhook_url: webhookUrl,
+      redirect_url: `${supabaseUrl}`, // Redirect back after payment
     };
 
-    console.log('Creating IntaSend payment collection...');
+    console.log('Creating IntaSend checkout session...');
 
-    const intasendResponse = await fetch('https://payment.intasend.com/api/v1/payment/collection/', {
+    const intasendResponse = await fetch('https://payment.intasend.com/api/v1/checkout/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${intasendSecretKey}`,
       },
-      body: JSON.stringify(paymentData),
+      body: JSON.stringify(checkoutData),
     });
 
     if (!intasendResponse.ok) {
