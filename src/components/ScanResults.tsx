@@ -133,10 +133,12 @@ export function ScanResults({ scanId }: ScanResultsProps) {
 
   const verifyPayment = async (reference: string) => {
     try {
+      setIsProcessingPayment(true);
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
         console.error('No session found for payment verification');
+        setIsProcessingPayment(false);
         return;
       }
 
@@ -160,15 +162,18 @@ export function ScanResults({ scanId }: ScanResultsProps) {
           description: "Failed to verify payment. Please contact support.",
           variant: "destructive",
         });
+        setIsProcessingPayment(false);
         return;
       }
 
       if (data?.success) {
+        // Immediately update subscription state
+        setHasSubscription(true);
         toast({
           title: "Payment Successful!",
-          description: "Your subscription has been activated for 7 days.",
+          description: "You can now view all founder details.",
         });
-        // Refresh subscription status
+        // Also refresh from database to ensure consistency
         await checkUserSubscription();
       } else {
         toast({
@@ -185,6 +190,8 @@ export function ScanResults({ scanId }: ScanResultsProps) {
         description: "Failed to verify payment. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsProcessingPayment(false);
     }
   };
 
