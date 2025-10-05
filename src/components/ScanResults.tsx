@@ -50,6 +50,17 @@ export function ScanResults({ scanId }: ScanResultsProps) {
     fetchResults();
     checkScanStatus();
     checkUserSubscription();
+
+    // Check for payment reference in URL (user returned from payment)
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentRef = urlParams.get('payment_ref');
+    
+    if (paymentRef) {
+      console.log('Payment reference found in URL, verifying payment...');
+      verifyPayment(paymentRef);
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
     
     // Set a timeout to check for stalled scans
     const timeoutId = setTimeout(() => {
@@ -120,6 +131,63 @@ export function ScanResults({ scanId }: ScanResultsProps) {
     };
   }, [scanId]);
 
+  const verifyPayment = async (reference: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        console.error('No session found for payment verification');
+        return;
+      }
+
+      console.log('Verifying payment with reference:', reference);
+      toast({
+        title: "Verifying Payment",
+        description: "Please wait while we verify your payment...",
+      });
+
+      const { data, error } = await supabase.functions.invoke('verify-payment', {
+        body: { reference },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (error) {
+        console.error('Payment verification error:', error);
+        toast({
+          title: "Verification Failed",
+          description: "Failed to verify payment. Please contact support.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (data?.success) {
+        toast({
+          title: "Payment Successful!",
+          description: "Your subscription has been activated for 7 days.",
+        });
+        // Refresh subscription status
+        await checkUserSubscription();
+      } else {
+        toast({
+          title: "Payment Not Confirmed",
+          description: "Payment could not be verified. Please try again or contact support.",
+          variant: "destructive",
+        });
+      }
+
+    } catch (error) {
+      console.error('Failed to verify payment:', error);
+      toast({
+        title: "Error",
+        description: "Failed to verify payment. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handlePayment = async () => {
     try {
       setIsProcessingPayment(true);
@@ -153,12 +221,9 @@ export function ScanResults({ scanId }: ScanResultsProps) {
       }
 
       if (data?.payment_url) {
-        console.log('Opening payment URL:', data.payment_url);
-        window.open(data.payment_url, '_blank');
-        toast({
-          title: "Payment Initiated",
-          description: "Payment page opened. Complete payment to unlock details.",
-        });
+        console.log('Redirecting to payment URL:', data.payment_url);
+        // Redirect to payment page - user will return with payment_ref
+        window.location.href = data.payment_url;
       } else {
         toast({
           title: "Payment Error",
@@ -509,7 +574,7 @@ export function ScanResults({ scanId }: ScanResultsProps) {
                         onClick={handlePayment}
                         disabled={isProcessingPayment}
                       >
-                        {isProcessingPayment ? 'Processing...' : 'Pay to Unlock (20 KSH)'}
+                        {isProcessingPayment ? 'Processing...' : 'Pay to Unlock (5 KSH)'}
                         {!isProcessingPayment && <ExternalLink className="w-4 h-4 ml-2" />}
                       </Button>
                       <p className="text-xs text-muted-foreground text-center">

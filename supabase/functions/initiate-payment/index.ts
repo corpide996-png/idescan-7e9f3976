@@ -57,13 +57,13 @@ serve(async (req) => {
     const reference = `sub_${user.id}_${Date.now()}`;
 
     // Initialize Paystack transaction
-    // Amount in kobo (smallest currency unit) - 20 KES = 2000 kobo
+    // Amount in kobo (smallest currency unit) - 5 KES = 500 kobo
     const transactionData = {
       email: profile.email,
-      amount: 2000, // 20 KES in kobo
+      amount: 500, // 5 KES in kobo
       currency: 'KES',
       reference: reference,
-      callback_url: appUrl,
+      callback_url: `${appUrl}?payment_ref=${reference}`,
       metadata: {
         user_id: user.id,
         full_name: profile.full_name || 'User',
