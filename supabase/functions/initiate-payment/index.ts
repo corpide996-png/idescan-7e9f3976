@@ -43,54 +43,63 @@ serve(async (req) => {
       throw new Error('User email not found');
     }
 
-    // Create IntaSend payment collection request
-    const intasendSecretKey = Deno.env.get('INTASEND_SECRET_KEY');
-    const intasendPublishableKey = Deno.env.get('INTASEND_PUBLISHABLE_KEY');
+    // Get Paystack secret key
+    const paystackSecretKey = Deno.env.get('PAYSTACK_SECRET_KEY');
     
-    if (!intasendSecretKey || !intasendPublishableKey) {
-      throw new Error('IntaSend API keys not configured');
+    if (!paystackSecretKey) {
+      throw new Error('Paystack API key not configured');
     }
 
     const webhookUrl = `${supabaseUrl}/functions/v1/payment-webhook`;
+    const appUrl = supabaseUrl.replace('.supabase.co', '.lovableproject.com');
 
-    // Create checkout session
-    const checkoutData = {
-      public_key: intasendPublishableKey,
-      amount: 200, // 200 KES for 7-day access
-      currency: 'KES',
+    // Create unique reference for this transaction
+    const reference = `sub_${user.id}_${Date.now()}`;
+
+    // Initialize Paystack transaction
+    // Amount in kobo (smallest currency unit) - 200 KES = 20000 kobo
+    const transactionData = {
       email: profile.email,
-      first_name: profile.full_name?.split(' ')[0] || 'User',
-      last_name: profile.full_name?.split(' ').slice(1).join(' ') || '',
-      api_ref: `subscription_${user.id}_${Date.now()}`,
-      webhook_url: webhookUrl,
-      redirect_url: `${supabaseUrl}`, // Redirect back after payment
+      amount: 20000, // 200 KES in kobo
+      currency: 'KES',
+      reference: reference,
+      callback_url: appUrl,
+      metadata: {
+        user_id: user.id,
+        full_name: profile.full_name || 'User',
+        subscription_days: 7
+      }
     };
 
-    console.log('Creating IntaSend checkout session...');
+    console.log('Creating Paystack transaction...');
 
-    const intasendResponse = await fetch('https://payment.intasend.com/api/v1/checkout/', {
+    const paystackResponse = await fetch('https://api.paystack.co/transaction/initialize', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${intasendSecretKey}`,
+        'Authorization': `Bearer ${paystackSecretKey}`,
       },
-      body: JSON.stringify(checkoutData),
+      body: JSON.stringify(transactionData),
     });
 
-    if (!intasendResponse.ok) {
-      const errorText = await intasendResponse.text();
-      console.error('IntaSend API error:', errorText);
-      throw new Error(`IntaSend API error: ${errorText}`);
+    if (!paystackResponse.ok) {
+      const errorText = await paystackResponse.text();
+      console.error('Paystack API error:', errorText);
+      throw new Error(`Paystack API error: ${errorText}`);
     }
 
-    const paymentResponse = await intasendResponse.json();
-    console.log('Payment collection created:', paymentResponse);
+    const paymentResponse = await paystackResponse.json();
+    console.log('Paystack transaction created:', paymentResponse);
+
+    if (!paymentResponse.status || !paymentResponse.data?.authorization_url) {
+      throw new Error('Invalid response from Paystack');
+    }
 
     return new Response(
       JSON.stringify({
         success: true,
-        payment_url: paymentResponse.url,
-        payment_id: paymentResponse.id,
+        payment_url: paymentResponse.data.authorization_url,
+        payment_id: paymentResponse.data.reference,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

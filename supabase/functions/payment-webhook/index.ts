@@ -15,44 +15,79 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const paystackSecretKey = Deno.env.get('PAYSTACK_SECRET_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log('Webhook received');
+    console.log('Paystack webhook received');
     
     // Parse the webhook payload
     const payload = await req.json();
     console.log('Webhook payload:', JSON.stringify(payload, null, 2));
 
-    // IntaSend webhook structure may vary, but typically includes:
-    // - state/status: "COMPLETE" or "SUCCESS"
-    // - customer email
-    // - amount
-    // - reference/invoice_id
+    // Paystack webhook structure:
+    // { event: "charge.success", data: { reference, amount, customer: { email }, status, ... } }
     
-    // Extract relevant data (adjust based on actual IntaSend webhook format)
-    const state = payload.state || payload.status;
-    const email = payload.email || payload.customer?.email || payload.customer_email;
-    const amount = payload.amount || payload.value;
-    const reference = payload.invoice_id || payload.reference || payload.id;
+    const event = payload.event;
+    const data = payload.data;
 
-    console.log(`Payment state: ${state}, Email: ${email}, Amount: ${amount}, Reference: ${reference}`);
-
-    // Only process successful payments
-    if (state !== 'COMPLETE' && state !== 'SUCCESS' && state !== 'PAID') {
-      console.log('Payment not successful, skipping');
+    // Only process successful charge events
+    if (event !== 'charge.success') {
+      console.log('Not a successful charge event, skipping');
       return new Response(
-        JSON.stringify({ message: 'Payment not successful', state }),
+        JSON.stringify({ message: 'Event not processed', event }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }
 
+    if (!data?.reference) {
+      console.error('No reference found in webhook payload');
+      return new Response(
+        JSON.stringify({ error: 'No reference found in payment data' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    // Verify the transaction with Paystack
+    console.log(`Verifying transaction: ${data.reference}`);
+    const verifyResponse = await fetch(
+      `https://api.paystack.co/transaction/verify/${data.reference}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${paystackSecretKey}`,
+        },
+      }
+    );
+
+    if (!verifyResponse.ok) {
+      const errorText = await verifyResponse.text();
+      console.error('Paystack verification error:', errorText);
+      throw new Error('Failed to verify transaction');
+    }
+
+    const verificationData = await verifyResponse.json();
+    console.log('Verification response:', JSON.stringify(verificationData, null, 2));
+
+    if (!verificationData.status || verificationData.data?.status !== 'success') {
+      console.log('Transaction not successful');
+      return new Response(
+        JSON.stringify({ message: 'Transaction not successful' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      );
+    }
+
+    const email = verificationData.data.customer?.email;
+    const amount = verificationData.data.amount;
+
     if (!email) {
-      console.error('No email found in webhook payload');
+      console.error('No email found in verification data');
       return new Response(
         JSON.stringify({ error: 'No email found in payment data' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
+
+    console.log(`Processing payment: Email: ${email}, Amount: ${amount}`);
 
     // Find user by email
     const { data: userData, error: userError } = await supabase
@@ -104,7 +139,7 @@ serve(async (req) => {
         message: 'Subscription activated',
         user_id: userId,
         expires_at: expiresAt.toISOString(),
-        reference: reference
+        reference: data.reference
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
