@@ -509,7 +509,7 @@ export function ScanResults({ scanId }: ScanResultsProps) {
                         onClick={handlePayment}
                         disabled={isProcessingPayment}
                       >
-                        {isProcessingPayment ? 'Processing...' : 'Pay to Unlock (200 KSH)'}
+                        {isProcessingPayment ? 'Processing...' : 'Pay to Unlock (20 KSH)'}
                         {!isProcessingPayment && <ExternalLink className="w-4 h-4 ml-2" />}
                       </Button>
                       <p className="text-xs text-muted-foreground text-center">
