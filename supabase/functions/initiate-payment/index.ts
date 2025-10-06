@@ -53,8 +53,10 @@ serve(async (req) => {
       throw new Error('Paystack API key not configured');
     }
 
+    // Get the app URL from the request origin for proper redirect
+    const origin = req.headers.get('origin') || req.headers.get('referer');
+    const appUrl = origin || `https://${Deno.env.get('SUPABASE_PROJECT_ID')}.lovableproject.com`;
     const webhookUrl = `${supabaseUrl}/functions/v1/payment-webhook`;
-    const appUrl = supabaseUrl.replace('.supabase.co', '.lovableproject.com');
 
     // Create unique reference for this transaction
     const reference = `sub_${user.id}_${Date.now()}`;
