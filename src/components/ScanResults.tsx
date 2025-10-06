@@ -218,6 +218,7 @@ export function ScanResults({ scanId }: ScanResultsProps) {
       console.log('Initiating payment...');
       
       const { data, error } = await supabase.functions.invoke('initiate-payment', {
+        body: { scanId },
         headers: {
           Authorization: `Bearer ${session.access_token}`
         }

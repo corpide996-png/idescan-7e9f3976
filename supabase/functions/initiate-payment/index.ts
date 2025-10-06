@@ -32,6 +32,9 @@ serve(async (req) => {
 
     console.log('Initiating payment for user:', user.id);
 
+    // Get scanId from request body
+    const { scanId } = await req.json();
+
     // Get user profile for email
     const { data: profile } = await supabase
       .from('profiles')
@@ -63,11 +66,12 @@ serve(async (req) => {
       amount: 500, // 5 KES in kobo
       currency: 'KES',
       reference: reference,
-      callback_url: `${appUrl}?payment_ref=${reference}`,
+      callback_url: `${appUrl}?payment_ref=${reference}${scanId ? `&scan_id=${scanId}` : ''}`,
       metadata: {
         user_id: user.id,
         full_name: profile.full_name || 'User',
-        subscription_days: 7
+        subscription_days: 7,
+        scan_id: scanId
       }
     };
 
