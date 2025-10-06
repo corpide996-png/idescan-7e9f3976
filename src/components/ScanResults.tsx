@@ -44,6 +44,7 @@ export function ScanResults({ scanId }: ScanResultsProps) {
   const [hasSubscription, setHasSubscription] = useState(false);
   const [checkingSubscription, setCheckingSubscription] = useState(true);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [justUnlocked, setJustUnlocked] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -167,8 +168,13 @@ export function ScanResults({ scanId }: ScanResultsProps) {
       }
 
       if (data?.success) {
-        // Immediately update subscription state
+        // Immediately update subscription state with unlock animation
+        setJustUnlocked(true);
         setHasSubscription(true);
+        
+        // Reset animation flag after animation completes
+        setTimeout(() => setJustUnlocked(false), 2000);
+        
         toast({
           title: "Payment Successful!",
           description: "You can now view all founder details.",
@@ -462,9 +468,19 @@ export function ScanResults({ scanId }: ScanResultsProps) {
               {hasSubscription ? (
                 <Dialog>
                   <DialogTrigger asChild>
-                    <Button variant="link" className="flex items-center gap-2 text-sm text-accent hover:text-accent-glow transition-colors p-0 h-auto">
-                      View Details
-                      <ExternalLink className="w-4 h-4" />
+                    <Button 
+                      variant="link" 
+                      className={`flex items-center gap-2 text-sm text-accent hover:text-accent-glow transition-all p-0 h-auto ${
+                        justUnlocked ? 'animate-[scale-in_0.5s_ease-out,fade-in_0.5s_ease-out] shadow-glow' : ''
+                      }`}
+                    >
+                      {justUnlocked && (
+                        <span className="absolute -inset-2 bg-accent/20 rounded-lg animate-ping" />
+                      )}
+                      <span className="relative flex items-center gap-2">
+                        View Details
+                        <ExternalLink className="w-4 h-4" />
+                      </span>
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-2xl">
