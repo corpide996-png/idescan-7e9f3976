@@ -168,17 +168,25 @@ export function ScanResults({ scanId }: ScanResultsProps) {
       }
 
       if (data?.success) {
+        console.log('Payment verified successfully! Triggering unlock animation...');
+        
         // Immediately update subscription state with unlock animation
         setJustUnlocked(true);
         setHasSubscription(true);
+        setCheckingSubscription(false);
+        
+        // Show success toast immediately
+        toast({
+          title: "🎉 Payment Successful!",
+          description: "Unlocking all founder details now...",
+        });
         
         // Reset animation flag after animation completes
-        setTimeout(() => setJustUnlocked(false), 2000);
+        setTimeout(() => {
+          setJustUnlocked(false);
+          console.log('Unlock animation complete');
+        }, 3000);
         
-        toast({
-          title: "Payment Successful!",
-          description: "You can now view all founder details.",
-        });
         // Also refresh from database to ensure consistency
         await checkUserSubscription();
       } else {
@@ -471,15 +479,18 @@ export function ScanResults({ scanId }: ScanResultsProps) {
                   <DialogTrigger asChild>
                     <Button 
                       variant="link" 
-                      className={`flex items-center gap-2 text-sm text-accent hover:text-accent-glow transition-all p-0 h-auto ${
-                        justUnlocked ? 'animate-[scale-in_0.5s_ease-out,fade-in_0.5s_ease-out] shadow-glow' : ''
+                      className={`relative flex items-center gap-2 text-sm text-accent hover:text-accent-glow transition-all p-0 h-auto ${
+                        justUnlocked ? 'animate-[scale-in_0.8s_ease-out] font-bold' : ''
                       }`}
                     >
                       {justUnlocked && (
-                        <span className="absolute -inset-2 bg-accent/20 rounded-lg animate-ping" />
+                        <>
+                          <span className="absolute -inset-4 bg-accent/30 rounded-lg animate-ping" />
+                          <span className="absolute -inset-2 bg-accent/20 rounded-lg animate-pulse" />
+                        </>
                       )}
                       <span className="relative flex items-center gap-2">
-                        View Details
+                        {justUnlocked ? '✨ View Details (Unlocked!)' : 'View Details'}
                         <ExternalLink className="w-4 h-4" />
                       </span>
                     </Button>
