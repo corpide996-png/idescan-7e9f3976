@@ -97,41 +97,6 @@ export type Database = {
           },
         ]
       }
-      scan_unlocks: {
-        Row: {
-          created_at: string
-          expires_at: string
-          id: string
-          scan_id: string
-          unlocked_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          expires_at: string
-          id?: string
-          scan_id: string
-          unlocked_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          expires_at?: string
-          id?: string
-          scan_id?: string
-          unlocked_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "scan_unlocks_scan_id_fkey"
-            columns: ["scan_id"]
-            isOneToOne: false
-            referencedRelation: "scans"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       scans: {
         Row: {
           created_at: string | null
@@ -162,6 +127,27 @@ export type Database = {
         }
         Relationships: []
       }
+      user_subscriptions: {
+        Row: {
+          created_at: string | null
+          expires_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -187,6 +173,10 @@ export type Database = {
         Args: { "": unknown[] }
         Returns: number
       }
+      has_active_subscription: {
+        Args: { check_user_id: string }
+        Returns: boolean
+      }
       hnsw_bit_support: {
         Args: { "": unknown }
         Returns: unknown
@@ -202,10 +192,6 @@ export type Database = {
       hnswhandler: {
         Args: { "": unknown }
         Returns: unknown
-      }
-      is_scan_unlocked: {
-        Args: { check_scan_id: string; check_user_id: string }
-        Returns: boolean
       }
       ivfflat_bit_support: {
         Args: { "": unknown }

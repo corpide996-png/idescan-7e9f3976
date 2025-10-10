@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ExternalLink, Building2, MapPin, Shield, User, Linkedin, Twitter, Mail, Lock, Loader2, Check } from "lucide-react";
+import { ExternalLink, Building2, MapPin, Shield, User, Linkedin, Twitter, Mail, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -41,8 +41,8 @@ export function ScanResults({ scanId }: ScanResultsProps) {
   const [results, setResults] = useState<ScanResult[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [scanStatus, setScanStatus] = useState<string>('processing');
-  const [scanUnlocked, setScanUnlocked] = useState(false);
-  const [checkingUnlock, setCheckingUnlock] = useState(true);
+  const [hasSubscription, setHasSubscription] = useState(false);
+  const [checkingSubscription, setCheckingSubscription] = useState(true);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [justUnlocked, setJustUnlocked] = useState(false);
   const { toast } = useToast();
@@ -50,7 +50,7 @@ export function ScanResults({ scanId }: ScanResultsProps) {
   useEffect(() => {
     fetchResults();
     checkScanStatus();
-    checkScanUnlock();
+    checkUserSubscription();
 
     // Check for payment reference in URL (user returned from payment)
     const urlParams = new URLSearchParams(window.location.search);
@@ -68,10 +68,10 @@ export function ScanResults({ scanId }: ScanResultsProps) {
       checkScanStatus();
     }, 30000); // Check after 30 seconds
     
-    // Re-check unlock when page becomes visible (after payment)
+    // Re-check subscription when page becomes visible (after payment)
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        checkScanUnlock();
+        checkUserSubscription();
       }
     };
     
@@ -116,11 +116,11 @@ export function ScanResults({ scanId }: ScanResultsProps) {
         {
           event: '*',
           schema: 'public',
-          table: 'scan_unlocks'
+          table: 'user_subscriptions'
         },
         () => {
-          // Re-check unlock when scan_unlocks table changes
-          checkScanUnlock();
+          // Re-check subscription when subscriptions table changes
+          checkUserSubscription();
         }
       )
       .subscribe();
@@ -131,36 +131,6 @@ export function ScanResults({ scanId }: ScanResultsProps) {
       supabase.removeChannel(channel);
     };
   }, [scanId]);
-
-  const checkScanUnlock = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setScanUnlocked(false);
-        setCheckingUnlock(false);
-        return;
-      }
-
-      const { data, error } = await supabase
-        .from('scan_unlocks')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('scan_id', scanId)
-        .gt('expires_at', new Date().toISOString())
-        .maybeSingle();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error checking scan unlock:', error);
-      }
-
-      setScanUnlocked(!!data);
-      setCheckingUnlock(false);
-    } catch (error) {
-      console.error('Error checking scan unlock:', error);
-      setScanUnlocked(false);
-      setCheckingUnlock(false);
-    }
-  };
 
   const verifyPayment = async (reference: string) => {
     try {
@@ -180,7 +150,7 @@ export function ScanResults({ scanId }: ScanResultsProps) {
       });
 
       const { data, error } = await supabase.functions.invoke('verify-payment', {
-        body: { reference, scanId },
+        body: { reference },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
@@ -200,15 +170,15 @@ export function ScanResults({ scanId }: ScanResultsProps) {
       if (data?.success) {
         console.log('Payment verified successfully! Triggering unlock animation...');
         
-        // Immediately update unlock state with animation
+        // Immediately update subscription state with unlock animation
         setJustUnlocked(true);
-        setScanUnlocked(true);
-        setCheckingUnlock(false);
+        setHasSubscription(true);
+        setCheckingSubscription(false);
         
         // Show success toast immediately
         toast({
           title: "🎉 Payment Successful!",
-          description: "This scan is now unlocked for 24 hours!",
+          description: "Unlocking all founder details now...",
         });
         
         // Reset animation flag after animation completes
@@ -218,7 +188,7 @@ export function ScanResults({ scanId }: ScanResultsProps) {
         }, 3000);
         
         // Also refresh from database to ensure consistency
-        await checkScanUnlock();
+        await checkUserSubscription();
       } else {
         toast({
           title: "Payment Not Confirmed",
@@ -292,6 +262,33 @@ export function ScanResults({ scanId }: ScanResultsProps) {
       });
     } finally {
       setIsProcessingPayment(false);
+    }
+  };
+
+  const checkUserSubscription = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setCheckingSubscription(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('user_subscriptions')
+        .select('expires_at')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error checking subscription:', error);
+      }
+
+      const isActive = data && new Date(data.expires_at) > new Date();
+      setHasSubscription(!!isActive);
+      setCheckingSubscription(false);
+    } catch (error) {
+      console.error('Error checking subscription:', error);
+      setCheckingSubscription(false);
     }
   };
 
@@ -413,17 +410,9 @@ export function ScanResults({ scanId }: ScanResultsProps) {
     );
   }
 
-  if (checkingUnlock) {
-    return (
-      <div className="flex justify-center items-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">
             Found {results.length} Similar Innovation{results.length !== 1 ? 's' : ''}
@@ -432,25 +421,6 @@ export function ScanResults({ scanId }: ScanResultsProps) {
             Searched across USPTO, international patents, and global startups
           </p>
         </div>
-        {!scanUnlocked && (
-          <Button
-            onClick={handlePayment}
-            disabled={isProcessingPayment}
-            className="bg-gradient-to-r from-primary to-accent hover:opacity-90"
-          >
-            {isProcessingPayment ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              <>
-                <Lock className="mr-2 h-4 w-4" />
-                Unlock Details (5 KES for 24h)
-              </>
-            )}
-          </Button>
-        )}
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -504,7 +474,7 @@ export function ScanResults({ scanId }: ScanResultsProps) {
                 </Badge>
               )}
 
-              {scanUnlocked ? (
+              {hasSubscription ? (
                 <Dialog>
                   <DialogTrigger asChild>
                     <Button 
@@ -528,153 +498,131 @@ export function ScanResults({ scanId }: ScanResultsProps) {
                   <DialogContent className="max-w-2xl">
                     <DialogHeader>
                       <DialogTitle>{result.title}</DialogTitle>
-                      <DialogDescription>Complete details about this innovation</DialogDescription>
+                      <DialogDescription>{result.snippet}</DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4">
-                      {result.snippet && (
-                        <div>
-                          <h4 className="font-semibold mb-2">Description</h4>
-                          <p className="text-sm text-muted-foreground">{result.snippet}</p>
-                        </div>
-                      )}
-                      
-                      {result.founder_name && (
-                        <div className="space-y-2">
-                          <h4 className="font-semibold">Founder Information</h4>
-                          <div className="flex items-center gap-2">
-                            <User className="w-4 h-4" />
-                            <span>{result.founder_name}</span>
+                    <div className="space-y-4 mt-4">
+                      {result.founder_name ? (
+                        <>
+                          <div className="flex items-start gap-3">
+                            <User className="w-5 h-5 mt-1 text-muted-foreground" />
+                            <div>
+                              <p className="font-semibold">Founder/Inventor</p>
+                              <p className="text-sm text-muted-foreground">{result.founder_name}</p>
+                            </div>
                           </div>
                           {result.founder_country && (
-                            <div className="flex items-center gap-2">
-                              <MapPin className="w-4 h-4" />
-                              <span>{result.founder_country}</span>
+                            <div className="flex items-start gap-3">
+                              <MapPin className="w-5 h-5 mt-1 text-muted-foreground" />
+                              <div>
+                                <p className="font-semibold">Country of Origin</p>
+                                <p className="text-sm text-muted-foreground">{result.founder_country}</p>
+                              </div>
                             </div>
                           )}
-                          
-                          {result.founder_social_media && (
-                            <div className="space-y-2 mt-4">
-                              <h5 className="text-sm font-semibold">Contact Information</h5>
-                              {result.founder_social_media.linkedin && (
-                                <a 
-                                  href={result.founder_social_media.linkedin}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-2 text-sm text-accent hover:text-accent-glow"
-                                >
-                                  <Linkedin className="w-4 h-4" />
-                                  LinkedIn Profile
-                                </a>
-                              )}
-                              {result.founder_social_media.twitter && (
-                                <a 
-                                  href={result.founder_social_media.twitter}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-2 text-sm text-accent hover:text-accent-glow"
-                                >
-                                  <Twitter className="w-4 h-4" />
-                                  Twitter Profile
-                                </a>
-                              )}
-                              {result.founder_social_media.email && (
-                                <a 
-                                  href={`mailto:${result.founder_social_media.email}`}
-                                  className="flex items-center gap-2 text-sm text-accent hover:text-accent-glow"
-                                >
-                                  <Mail className="w-4 h-4" />
-                                  {result.founder_social_media.email}
-                                </a>
-                              )}
+                          {result.founder_social_media && Object.keys(result.founder_social_media).length > 0 && (
+                            <div className="space-y-2">
+                              <p className="font-semibold">Social Media</p>
+                              <div className="flex flex-col gap-2">
+                                {result.founder_social_media.linkedin && (
+                                  <a
+                                    href={result.founder_social_media.linkedin}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 text-sm text-primary hover:underline"
+                                  >
+                                    <Linkedin className="w-4 h-4" />
+                                    LinkedIn Profile
+                                  </a>
+                                )}
+                                {result.founder_social_media.twitter && (
+                                  <a
+                                    href={result.founder_social_media.twitter}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 text-sm text-primary hover:underline"
+                                  >
+                                    <Twitter className="w-4 h-4" />
+                                    Twitter/X Profile
+                                  </a>
+                                )}
+                                {result.founder_social_media.email && (
+                                  <a
+                                    href={`mailto:${result.founder_social_media.email}`}
+                                    className="flex items-center gap-2 text-sm text-primary hover:underline"
+                                  >
+                                    <Mail className="w-4 h-4" />
+                                    {result.founder_social_media.email}
+                                  </a>
+                                )}
+                              </div>
                             </div>
                           )}
-                        </div>
+                        </>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Founder information not available for this result.</p>
                       )}
-                      
                       {result.url && (
-                        <a 
-                          href={result.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 text-sm text-accent hover:text-accent-glow"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                          View Source
-                        </a>
+                        <div className="pt-4 border-t">
+                          <a
+                            href={result.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-primary hover:underline flex items-center gap-2"
+                          >
+                            Visit Official Source
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        </div>
                       )}
                     </div>
                   </DialogContent>
                 </Dialog>
               ) : (
-                <Button 
-                  onClick={handlePayment}
-                  disabled={isProcessingPayment}
-                  variant="link"
-                  className="p-0 h-auto text-muted-foreground"
-                >
-                  <Lock className="w-4 h-4 mr-2" />
-                  Locked - Pay 5 KES to unlock
-                </Button>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="flex items-center gap-2 text-sm">
+                      <Lock className="w-4 h-4" />
+                      Unlock Details
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Unlock Founder Details</DialogTitle>
+                      <DialogDescription>
+                        Get access to founder information, social media handles, and contact details for 7 days.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-4">
+                      <div className="bg-muted p-4 rounded-lg space-y-2">
+                        <p className="text-sm font-semibold">What you'll get:</p>
+                        <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                          <li>Founder/Inventor names</li>
+                          <li>Country of origin</li>
+                          <li>LinkedIn profiles</li>
+                          <li>Twitter/X handles</li>
+                          <li>Email addresses</li>
+                          <li>7 days unlimited access</li>
+                        </ul>
+                      </div>
+                      <Button 
+                        className="w-full" 
+                        onClick={handlePayment}
+                        disabled={isProcessingPayment}
+                      >
+                        {isProcessingPayment ? 'Processing...' : 'Pay to Unlock (5 KSH)'}
+                        {!isProcessingPayment && <ExternalLink className="w-4 h-4 ml-2" />}
+                      </Button>
+                      <p className="text-xs text-muted-foreground text-center">
+                        Complete payment to get 7 days unlimited access
+                      </p>
+                    </div>
+                  </DialogContent>
+                </Dialog>
               )}
             </CardContent>
           </Card>
         ))}
       </div>
-
-      {/* Unlock Details Dialog */}
-      <Dialog>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              Unlock This Scan's Details
-            </DialogTitle>
-            <DialogDescription className="text-base text-muted-foreground">
-              Pay 5 KES to unlock all founder information for this scan for 24 hours
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-6">
-            <div className="bg-gradient-to-br from-primary/10 to-accent/10 p-6 rounded-lg border border-primary/20">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-lg font-semibold">24-Hour Access</span>
-                <span className="text-3xl font-bold text-primary">5 KES</span>
-              </div>
-              <ul className="space-y-3 text-sm text-muted-foreground">
-                <li className="flex items-start gap-2">
-                  <Check className="w-5 h-5 text-accent shrink-0 mt-0.5" />
-                  <span>Unlock all founder details for this specific scan</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="w-5 h-5 text-accent shrink-0 mt-0.5" />
-                  <span>Access remains active for 24 hours</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <Check className="w-5 h-5 text-accent shrink-0 mt-0.5" />
-                  <span>View contact information, social media, and more</span>
-                </li>
-              </ul>
-            </div>
-
-            <Button 
-              onClick={handlePayment}
-              disabled={isProcessingPayment}
-              className="w-full bg-gradient-to-r from-primary to-accent hover:opacity-90 transition-opacity"
-            >
-              {isProcessingPayment ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <Lock className="mr-2 h-5 w-5" />
-                  Unlock for 5 KES
-                </>
-              )}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

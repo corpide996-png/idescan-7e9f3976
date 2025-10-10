@@ -31,15 +31,11 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    // Get payment reference and scanId from request body
-    const { reference, scanId } = await req.json();
+    // Get payment reference from request body
+    const { reference } = await req.json();
     
     if (!reference) {
       throw new Error('Payment reference is required');
-    }
-
-    if (!scanId) {
-      throw new Error('Scan ID is required');
     }
 
     console.log(`Verifying payment for reference: ${reference}`);
@@ -75,35 +71,33 @@ serve(async (req) => {
       );
     }
 
-    // Payment is successful, unlock this specific scan for 24 hours
+    // Payment is successful, activate subscription
     const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24);
+    expiresAt.setDate(expiresAt.getDate() + 7);
 
-    const { data: unlockData, error: unlockError } = await supabase
-      .from('scan_unlocks')
+    const { data: subscriptionData, error: subscriptionError } = await supabase
+      .from('user_subscriptions')
       .upsert({
         user_id: user.id,
-        scan_id: scanId,
         expires_at: expiresAt.toISOString(),
       }, {
-        onConflict: 'user_id,scan_id'
+        onConflict: 'user_id'
       })
       .select()
       .single();
 
-    if (unlockError) {
-      console.error('Error unlocking scan:', unlockError);
-      throw new Error('Failed to unlock scan');
+    if (subscriptionError) {
+      console.error('Error creating subscription:', subscriptionError);
+      throw new Error('Failed to activate subscription');
     }
 
-    console.log(`Scan ${scanId} unlocked for user ${user.id}, expires at ${expiresAt.toISOString()}`);
+    console.log(`Subscription activated for user ${user.id}, expires at ${expiresAt.toISOString()}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Scan unlocked successfully',
-        expires_at: expiresAt.toISOString(),
-        scan_id: scanId
+        message: 'Subscription activated successfully',
+        expires_at: expiresAt.toISOString()
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
