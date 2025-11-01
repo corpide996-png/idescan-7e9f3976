@@ -92,11 +92,11 @@ const Index = () => {
 
           <div className="text-center max-w-3xl mx-auto mb-16 space-y-6">
             <h2 className="text-5xl md:text-6xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-              Shazam for Innovations
+              AI-Powered Market Insights
             </h2>
             <p className="text-xl text-muted-foreground">
-              Scan your ideas and instantly discover similar innovations across patents, 
-              startups, and research papers worldwide.
+              Scan your ideas and get instant AI-powered market analysis with category scores, 
+              performance insights, location recommendations, and success predictions.
             </p>
           </div>
         </div>

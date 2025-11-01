@@ -40,52 +40,46 @@ export type Database = {
       }
       scan_results: {
         Row: {
-          country: string | null
+          agriculture_score: number | null
+          arts_score: number | null
+          best_locations: Json | null
+          best_sectors: Json | null
           created_at: string | null
-          founder_country: string | null
-          founder_name: string | null
-          founder_social_media: Json | null
+          fashion_score: number | null
+          health_score: number | null
           id: string
-          legal_status: string | null
-          owner: string | null
+          market_performance: Json | null
           scan_id: string
-          similarity_score: number
-          snippet: string | null
-          source_type: string | null
-          title: string
-          url: string | null
+          simulation_data: Json | null
+          tech_score: number | null
         }
         Insert: {
-          country?: string | null
+          agriculture_score?: number | null
+          arts_score?: number | null
+          best_locations?: Json | null
+          best_sectors?: Json | null
           created_at?: string | null
-          founder_country?: string | null
-          founder_name?: string | null
-          founder_social_media?: Json | null
+          fashion_score?: number | null
+          health_score?: number | null
           id?: string
-          legal_status?: string | null
-          owner?: string | null
+          market_performance?: Json | null
           scan_id: string
-          similarity_score: number
-          snippet?: string | null
-          source_type?: string | null
-          title: string
-          url?: string | null
+          simulation_data?: Json | null
+          tech_score?: number | null
         }
         Update: {
-          country?: string | null
+          agriculture_score?: number | null
+          arts_score?: number | null
+          best_locations?: Json | null
+          best_sectors?: Json | null
           created_at?: string | null
-          founder_country?: string | null
-          founder_name?: string | null
-          founder_social_media?: Json | null
+          fashion_score?: number | null
+          health_score?: number | null
           id?: string
-          legal_status?: string | null
-          owner?: string | null
+          market_performance?: Json | null
           scan_id?: string
-          similarity_score?: number
-          snippet?: string | null
-          source_type?: string | null
-          title?: string
-          url?: string | null
+          simulation_data?: Json | null
+          tech_score?: number | null
         }
         Relationships: [
           {
