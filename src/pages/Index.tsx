@@ -26,17 +26,6 @@ const Index = () => {
       setUser(session?.user ?? null);
     });
 
-    // Check for payment return with scan_id
-    const urlParams = new URLSearchParams(window.location.search);
-    const scanIdFromUrl = urlParams.get('scan_id');
-    
-    if (scanIdFromUrl) {
-      console.log('Payment return detected, showing scan results:', scanIdFromUrl);
-      setCurrentScanId(scanIdFromUrl);
-      setActiveTab("results");
-      // Clean up URL without page reload
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
 
     return () => subscription.unsubscribe();
   }, []);
